@@ -5,6 +5,7 @@ import csv
 import json
 import chardet
 import os
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -70,26 +71,21 @@ def process_csv(input_file, output_file, noise_level, encoding):
     """
     Processes a CSV file, injecting noise into numerical fields.
     """
-    try:
-        with open(input_file, 'r', encoding=encoding) as infile, \
-             open(output_file, 'w', newline='', encoding=encoding) as outfile:
+    # The whole input is read before the output is opened. An empty file
+    # used to fail on the header read after the output had already been
+    # created, leaving a zero byte file that looked like a result.
+    with open(input_file, 'r', encoding=encoding) as infile:
+        rows = list(csv.reader(infile))
+    if not rows:
+        raise ValueError(f"CSV file is empty: {input_file}")
 
-            reader = csv.reader(infile)
-            writer = csv.writer(outfile)
+    with open(output_file, 'w', newline='', encoding=encoding) as outfile:
+        writer = csv.writer(outfile)
+        writer.writerow(rows[0])  # Write the header row
+        for row in rows[1:]:
+            writer.writerow([inject_noise(cell, noise_level) for cell in row])
 
-            header = next(reader)
-            writer.writerow(header)  # Write the header row
-
-            for row in reader:
-                new_row = [inject_noise(cell, noise_level) for cell in row]
-                writer.writerow(new_row)
-
-        logging.info(f"Successfully processed CSV file: {input_file}")
-
-    except FileNotFoundError:
-        logging.error(f"Input file not found: {input_file}")
-    except Exception as e:
-        logging.error(f"Error processing CSV file: {e}")
+    logging.info(f"Successfully processed CSV file: {input_file}")
 
 
 def process_json(input_file, output_file, noise_level, encoding):
@@ -106,6 +102,11 @@ def process_json(input_file, output_file, noise_level, encoding):
             elif isinstance(obj, list):
                 return [process_data(item) for item in obj]
             else:
+                # Only real numbers take noise. float(True) is 1.0, so
+                # routing a JSON boolean through inject_noise silently
+                # rewrote it as a noisy float and changed the value's type.
+                if isinstance(obj, bool) or obj is None or isinstance(obj, str):
+                    return obj
                 return inject_noise(obj, noise_level)
 
         noisy_data = process_data(data)
@@ -117,10 +118,13 @@ def process_json(input_file, output_file, noise_level, encoding):
 
     except FileNotFoundError:
         logging.error(f"Input file not found: {input_file}")
+        raise
     except json.JSONDecodeError:
         logging.error(f"Invalid JSON format in file: {input_file}")
+        raise
     except Exception as e:
         logging.error(f"Error processing JSON file: {e}")
+        raise
 
 
 def main():
@@ -136,11 +140,11 @@ def main():
     # Input validation
     if not (0 <= noise_level <= 1):
         logging.error("Noise level must be between 0 and 1.")
-        return
+        sys.exit(1)
 
     if not os.path.exists(input_file):
         logging.error(f"Input file '{input_file}' does not exist.")
-        return
+        sys.exit(1)
 
     # Determine encoding
     encoding = args.encoding
@@ -161,16 +165,19 @@ def main():
             file_type = "json"
         else:
             logging.error("Could not automatically determine file type. Please specify using --file_type.")
-            return
+            sys.exit(1)
     if file_type not in ["csv", "json"]:
         logging.error("Invalid file type. Choose 'csv' or 'json'.")
-        return
+        sys.exit(1)
 
     # Process the file
-    if file_type == "csv":
-        process_csv(input_file, output_file, noise_level, encoding)
-    elif file_type == "json":
-        process_json(input_file, output_file, noise_level, encoding)
+    try:
+        if file_type == "csv":
+            process_csv(input_file, output_file, noise_level, encoding)
+        elif file_type == "json":
+            process_json(input_file, output_file, noise_level, encoding)
+    except Exception:
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
