@@ -23,7 +23,7 @@ def setup_argparse():
         "--noise_level",
         type=float,
         default=0.01,
-        help="Percentage of noise to add (e.g., 0.01 for 1%). Default: 0.01",
+        help="Percentage of noise to add (e.g., 0.01 for 1%%). Default: 0.01",
     )
     parser.add_argument(
         "--file_type",
