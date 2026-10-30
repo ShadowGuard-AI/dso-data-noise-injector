@@ -1,3 +1,5 @@
+![Banner](banner.png)
+
 # dso-data-noise-injector
 Inserts random, statistically insignificant noise into numerical data fields to prevent reverse engineering of precise values while preserving general trends. - Focused on Tools for sanitizing and obfuscating sensitive data within text files and structured data formats
 
