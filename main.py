@@ -58,6 +58,11 @@ def inject_noise(value, noise_level, fallback_scale=0.0):
     """
     Injects random noise into a numerical value.
     """
+    # The draws come from the global random module and no seed option
+    # exists in the CLI, so no run can be reproduced or checked after the
+    # fact. The fallback scale for a zero cell is the whole column or file
+    # range, which a single outlier stretches: one extreme value in a
+    # column sets the noise size for every zero in it.
     try:
         value = float(value)  # Attempt to convert to float
         if value == 0:
@@ -99,6 +104,15 @@ def process_csv(input_file, output_file, noise_level, encoding):
             col_ranges[idx] = (min(lo, num), max(hi, num))
 
     noised = 0
+    # There is no column selection anywhere in this tool, and I have the
+    # probe output to prove what that means: in a CSV every cell that
+    # parses as a number takes noise, including identifier columns and
+    # years, so 101 becomes 100.71 and 2021 becomes 2032.8 at the default
+    # level. A noised cell also comes back as a full float string, so an
+    # integer column changes shape as well as value. The JSON path below
+    # makes the opposite choice for strings: a number stored as text is
+    # left alone there, so the two formats do not treat the same data the
+    # same way.
 
     def noise_cell(idx, cell):
         nonlocal noised
